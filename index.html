@@ -443,7 +443,7 @@ function makePlayer(id,name,isBot){ return {id, name, isBot, sun:START_SUN, moon
 // back to plain native <audio> playback (capped at 100%, still fully audible).
 const IS_FILE_PROTOCOL = (window.location.protocol === 'file:');
 const BGM = {
-  tracks:null, active:1, muted:false, initialized:false, pendingTimer:null,
+  tracks:null, active:1, muted:false, initialized:false, pendingTimer:null, everStarted:false,
   ctx:null, gainNode:null, volume:2.0, graphReady:false, warned:{1:false,2:false}, notifiedFileMode:false,
   init(){
     this.tracks = { 1: document.getElementById('bgm1'), 2: document.getElementById('bgm2') };
@@ -509,18 +509,26 @@ const BGM = {
     if(!this.initialized) this.init();
     if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
     if(!this.muted && this.tracks[this.active].paused && this.tracks[this.active].currentTime===0){
+      this.everStarted = true;
       this.playTrack(this.active);
     }
   },
   toggleMute(){
     if(!this.initialized) this.init();
     if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
-    this.muted = !this.muted;
-    if(this.muted){
-      Object.values(this.tracks).forEach(a=>a.pause());
-      if(this.pendingTimer){ clearTimeout(this.pendingTimer); this.pendingTimer=null; }
-    } else {
+    if(!this.everStarted){
+      // first-ever interaction with the music control: always (re)start playback rather than toggling off
+      this.everStarted = true;
+      this.muted = false;
       this.playTrack(this.active);
+    } else {
+      this.muted = !this.muted;
+      if(this.muted){
+        Object.values(this.tracks).forEach(a=>a.pause());
+        if(this.pendingTimer){ clearTimeout(this.pendingTimer); this.pendingTimer=null; }
+      } else {
+        this.playTrack(this.active);
+      }
     }
     document.querySelectorAll('.music-btn').forEach(b=> b.textContent = this.muted? '🔇 음악':'🔊 음악');
   }
