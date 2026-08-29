@@ -437,9 +437,14 @@ function randomRoomId(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s='
 function makePlayer(id,name,isBot){ return {id, name, isBot, sun:START_SUN, moon:START_MOON, hand:[], totems:[], shield:false, skipNext:false, alive:true}; }
 
 /* ============================= BACKGROUND MUSIC (bgm1.mp3 / bgm2.mp3, alternating with 0.5s gap, gain-boosted) ============================= */
+// NOTE: Chrome/Edge routes <audio> through Web Audio's MediaElementSource as CORS-tainted when the
+// page is opened via file:// — playback proceeds with no error, but the graph silently outputs zero volume.
+// So the volume-boost graph is only attempted when the page is served over http(s); on file:// we fall
+// back to plain native <audio> playback (capped at 100%, still fully audible).
+const IS_FILE_PROTOCOL = (window.location.protocol === 'file:');
 const BGM = {
   tracks:null, active:1, muted:false, initialized:false, pendingTimer:null,
-  ctx:null, gainNode:null, volume:2.0, graphReady:false, warned:{1:false,2:false},
+  ctx:null, gainNode:null, volume:2.0, graphReady:false, warned:{1:false,2:false}, notifiedFileMode:false,
   init(){
     this.tracks = { 1: document.getElementById('bgm1'), 2: document.getElementById('bgm2') };
     this.tracks[1].volume = 1; this.tracks[2].volume = 1;
@@ -448,14 +453,21 @@ const BGM = {
     this.tracks[1].addEventListener('error', ()=> this.notifyMissing(1,'bgm1.mp3'));
     this.tracks[2].addEventListener('error', ()=> this.notifyMissing(2,'bgm2.mp3'));
     this.initialized = true;
-    this.connectGraph();
+    if(IS_FILE_PROTOCOL){
+      if(!this.notifiedFileMode){
+        this.notifiedFileMode = true;
+        showToast('ℹ️ file://로 열려 있어 음량 증폭 없이 기본 볼륨(최대 100%)으로 재생됩니다.<div style="font-family:var(--font-mono); font-size:11px; margin-top:4px; color:var(--ivory-dim);">200%+ 증폭이 필요하면 로컬 웹서버나 GitHub Pages로 열어보세요</div>');
+      }
+    } else {
+      this.connectGraph();
+    }
   },
   notifyMissing(n,name){
     if(this.warned[n]) return; this.warned[n]=true;
     showToast(`⚠ <b>${esc(name)}</b> 파일을 불러올 수 없습니다.<div style="font-family:var(--font-mono); font-size:11px; margin-top:4px; color:var(--ivory-dim);">index.html과 같은 폴더에 파일명이 정확한지 확인하세요</div>`,'fail');
   },
   connectGraph(){
-    if(this.graphReady) return;
+    if(this.graphReady || IS_FILE_PROTOCOL) return;
     try{
       this.ctx = new (window.AudioContext||window.webkitAudioContext)();
       this.gainNode = this.ctx.createGain();
@@ -465,11 +477,16 @@ const BGM = {
       src1.connect(this.gainNode); src2.connect(this.gainNode);
       this.gainNode.connect(this.ctx.destination);
       this.graphReady = true;
-    }catch(e){ /* if the graph can't be set up, playback still works at normal (unboosted) volume */ }
+    }catch(e){ /* graph unavailable; native <audio> volume still plays audibly */ }
   },
   setVolume(v){
     this.volume = v;
-    if(this.gainNode) this.gainNode.gain.value = v;
+    if(this.graphReady && this.gainNode){
+      this.gainNode.gain.value = v;
+    } else if(this.tracks){
+      const native = Math.min(1, v);
+      this.tracks[1].volume = native; this.tracks[2].volume = native;
+    }
     document.querySelectorAll('.volume-pct').forEach(el=> el.textContent = Math.round(v*100)+'%');
   },
   scheduleNext(n){
@@ -481,7 +498,12 @@ const BGM = {
     const el = this.tracks[n], other = this.tracks[n===1?2:1];
     other.pause(); other.currentTime = 0;
     el.currentTime = 0;
-    el.play().catch(()=>{ /* blocked until a user gesture occurs; retried via ensureStarted */ });
+    const p = el.play();
+    if(p && p.catch){
+      p.catch((err)=>{
+        showToast(`⚠ 재생이 차단되었습니다.<div style="font-family:var(--font-mono); font-size:11px; margin-top:4px; color:var(--ivory-dim);">${esc(err && err.message ? err.message : String(err))}</div>`,'fail');
+      });
+    }
   },
   ensureStarted(){
     if(!this.initialized) this.init();
