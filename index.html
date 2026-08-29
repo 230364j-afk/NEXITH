@@ -93,6 +93,9 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
 .ghost-btn{width:100%; padding:11px; margin-top:8px; border-radius:8px; border:1px solid var(--panel-border); background:none; color:var(--ivory-dim); font-family:var(--font-mono); font-size:12px; cursor:pointer;}
 .ghost-btn:hover{border-color:var(--ivory-dim); color:var(--ivory);}
 
+.volume-slider{width:90px; accent-color:var(--gold);}
+.volume-pct{font-family:var(--font-mono); font-size:10.5px; color:var(--ivory-dim); min-width:34px; text-align:left;}
+.music-row{display:flex; align-items:center; gap:8px; justify-content:center;}
 .rules-hint{margin-top:16px; font-size:14px; color:var(--ivory-dim); line-height:1.55;}
 .rules-hint b{color:var(--gold-bright); font-weight:600;}
 
@@ -239,7 +242,11 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
   <div class="sigil"><div class="sigil-glyph">☾☉</div></div>
   <div class="title-deco">THE NEXIS FAITH</div>
   <div class="subtitle">운명의 계약 · 신비 카드 결투</div>
-  <button class="icon-btn music-btn" onclick="BGM.toggleMute()" style="margin-bottom:18px;">🔊 음악</button>
+  <div class="music-row" style="margin-bottom:18px;">
+    <button class="icon-btn music-btn" onclick="BGM.toggleMute()">🔊 음악</button>
+    <input class="volume-slider" type="range" min="50" max="300" value="200" oninput="BGM.setVolume(this.value/100)">
+    <span class="volume-pct">200%</span>
+  </div>
 
   <div class="setup-card">
     <div class="mode-tabs">
@@ -294,8 +301,10 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
   <div class="topbar">
     <div class="brand">☾ THE NEXIS FAITH ☉</div>
     <div class="turn-indicator" id="turn-indicator">—</div>
-    <div style="display:flex; gap:8px;">
+    <div class="music-row">
       <button class="icon-btn music-btn" onclick="BGM.toggleMute()">🔊 음악</button>
+      <input class="volume-slider" type="range" min="50" max="300" value="200" oninput="BGM.setVolume(this.value/100)">
+      <span class="volume-pct">200%</span>
       <button class="icon-btn" id="compendium-btn">📖 도감 (I)</button>
     </div>
   </div>
@@ -427,14 +436,41 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;'
 function randomRoomId(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
 function makePlayer(id,name,isBot){ return {id, name, isBot, sun:START_SUN, moon:START_MOON, hand:[], totems:[], shield:false, skipNext:false, alive:true}; }
 
-/* ============================= BACKGROUND MUSIC (bgm1.mp3 / bgm2.mp3, alternating with 0.5s gap) ============================= */
+/* ============================= BACKGROUND MUSIC (bgm1.mp3 / bgm2.mp3, alternating with 0.5s gap, gain-boosted) ============================= */
 const BGM = {
   tracks:null, active:1, muted:false, initialized:false, pendingTimer:null,
+  ctx:null, gainNode:null, volume:2.0, graphReady:false, warned:{1:false,2:false},
   init(){
     this.tracks = { 1: document.getElementById('bgm1'), 2: document.getElementById('bgm2') };
+    this.tracks[1].volume = 1; this.tracks[2].volume = 1;
     this.tracks[1].addEventListener('ended', ()=> this.scheduleNext(2));
     this.tracks[2].addEventListener('ended', ()=> this.scheduleNext(1));
+    this.tracks[1].addEventListener('error', ()=> this.notifyMissing(1,'bgm1.mp3'));
+    this.tracks[2].addEventListener('error', ()=> this.notifyMissing(2,'bgm2.mp3'));
     this.initialized = true;
+    this.connectGraph();
+  },
+  notifyMissing(n,name){
+    if(this.warned[n]) return; this.warned[n]=true;
+    showToast(`⚠ <b>${esc(name)}</b> 파일을 불러올 수 없습니다.<div style="font-family:var(--font-mono); font-size:11px; margin-top:4px; color:var(--ivory-dim);">index.html과 같은 폴더에 파일명이 정확한지 확인하세요</div>`,'fail');
+  },
+  connectGraph(){
+    if(this.graphReady) return;
+    try{
+      this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      this.gainNode = this.ctx.createGain();
+      this.gainNode.gain.value = this.volume;
+      const src1 = this.ctx.createMediaElementSource(this.tracks[1]);
+      const src2 = this.ctx.createMediaElementSource(this.tracks[2]);
+      src1.connect(this.gainNode); src2.connect(this.gainNode);
+      this.gainNode.connect(this.ctx.destination);
+      this.graphReady = true;
+    }catch(e){ /* if the graph can't be set up, playback still works at normal (unboosted) volume */ }
+  },
+  setVolume(v){
+    this.volume = v;
+    if(this.gainNode) this.gainNode.gain.value = v;
+    document.querySelectorAll('.volume-pct').forEach(el=> el.textContent = Math.round(v*100)+'%');
   },
   scheduleNext(n){
     if(this.pendingTimer) clearTimeout(this.pendingTimer);
@@ -449,12 +485,14 @@ const BGM = {
   },
   ensureStarted(){
     if(!this.initialized) this.init();
+    if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
     if(!this.muted && this.tracks[this.active].paused && this.tracks[this.active].currentTime===0){
       this.playTrack(this.active);
     }
   },
   toggleMute(){
     if(!this.initialized) this.init();
+    if(this.ctx && this.ctx.state==='suspended') this.ctx.resume();
     this.muted = !this.muted;
     if(this.muted){
       Object.values(this.tracks).forEach(a=>a.pause());
