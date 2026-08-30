@@ -232,12 +232,28 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
   .hud-row{flex-direction:column; align-items:center;}
   .fate-hud,.cards-hud{text-align:center;}
   .card{width:92px; min-height:128px;}
+#shield-overlay{
+  position:fixed; inset:0; z-index:1; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='84' viewBox='0 0 48 84'%3E%3Cpath d='M24 0L48 14V42L24 56L0 42V14Z' fill='none' stroke='%23ffd452' stroke-width='3'/%3E%3Cpath d='M24 28L48 42V70L24 84L0 70V42Z' fill='none' stroke='%23ffd452' stroke-width='3'/%3E%3C/svg%3E");
+  background-size:48px 84px;
+  opacity:0; transition:opacity .5s ease;
+  filter:drop-shadow(0 0 10px rgba(255,212,82,0.85)) saturate(1.5);
+  mix-blend-mode:screen;
+}
+#shield-overlay.active{ opacity:0.5; animation:honeycombPulse 2.2s ease-in-out infinite; }
+@keyframes honeycombPulse{ 0%,100%{opacity:0.36;} 50%{opacity:0.62;} }
+#shield-overlay.shatter{ opacity:0.8; animation:honeycombShatter 0.8s ease-out forwards; }
+@keyframes honeycombShatter{
+  0%{ opacity:0.75; filter:drop-shadow(0 0 24px rgba(255,220,120,1)) brightness(2.1) saturate(1.6); transform:scale(1); }
+  35%{ opacity:0.9; filter:drop-shadow(0 0 32px rgba(255,255,255,1)) brightness(2.6); transform:scale(1.045); }
+  100%{ opacity:0; filter:drop-shadow(0 0 0 rgba(255,212,82,0)); transform:scale(1.1); }
 }
 </style>
 </head>
 <body>
 
 <div id="toast-layer"></div>
+<div id="shield-overlay"></div>
 <audio id="bgm1" src="bgm1.mp3" preload="auto"></audio>
 <audio id="bgm2" src="bgm2.mp3" preload="auto"></audio>
 
@@ -283,7 +299,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
       <div class="rules-hint" style="margin-top:4px;">※ 실제 인터넷 전체의 공개 방 목록을 보려면 별도의 룸 디렉터리 서버가 필요합니다. 위 목록은 <b>같은 브라우저의 다른 탭</b>에서 연 방만 표시됩니다. 원격 상대와 플레이하려면 Room ID를 직접 공유해 입장하세요.</div>
     </div>
 
-    <div class="rules-hint" style="margin-top:18px;">☀ 양 + 🌙 음이 정확히 <b>24</b>가 되면 승리, 손패가 <b>10장</b>에 이르면 그 플레이어는 파멸합니다. 모든 플레이어는 ☀3 · 🌙3으로 의식을 시작합니다.</div>
+    <div class="rules-hint" style="margin-top:18px;">☀ 양 + 🌙 음이 정확히 <b>30</b>이 되면 승리, 손패가 <b>10장</b>에 이르면 그 플레이어는 파멸합니다. 총합이 <b>24</b>에 이르면 균형 판정 위험도가 100%에 달합니다. 모든 플레이어는 ☀3 · 🌙3으로 의식을 시작합니다.</div>
   </div>
 </div>
 
@@ -335,7 +351,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
     <div class="fate-hud">
       <div class="lbl">FATE</div>
       <div class="fate-nums"><span class="sun" id="hud-sun">☀ 0</span><span class="moon" id="hud-moon">🌙 0</span></div>
-      <div class="fate-total" id="hud-total">TOTAL 0 / 24</div>
+      <div class="fate-total" id="hud-total">TOTAL 0 / 30</div>
       <div class="risk-bar-track"><div class="risk-bar-fill" id="risk-bar"></div></div>
       <div class="risk-label" id="risk-label">RISK 0%</div>
     </div>
@@ -419,7 +435,7 @@ const CARD_TYPES = [
   {id:'chaos_swap',family:'CHAOS',name:'Fate Swap',cost:{},count:3,desc:'☀와 🌙 운명 수치를 서로 교환합니다.',needsTarget:false,
     apply:(g,p)=>{ const s=p.sun; p.sun=p.moon; p.moon=s; g.log(`${p.name}의 운명이 뒤바뀌었습니다.`); g.checkWin(p); }},
 
-  {id:'totem_shield',family:'TOTEM',name:'Fate Shield',cost:{sun:1,moon:1},count:2,desc:'[지속] 다음 저주를 1회 막습니다.',needsTarget:false,isTotem:true,
+  {id:'totem_shield',family:'TOTEM',name:'Fate Shield',cost:{sun:1,moon:1},count:2,desc:'[지속] 3턴마다 저주를 1회 막습니다.',needsTarget:false,isTotem:true,
     apply:(g,p)=>{ g.addTotem(p,'totem_shield'); }},
   {id:'totem_fortune',family:'TOTEM',name:'Double Fortune',cost:{sun:1,moon:1},count:2,desc:'[지속] 운명 획득 시 20% 확률로 2배.',needsTarget:false,isTotem:true,
     apply:(g,p)=>{ g.addTotem(p,'totem_fortune'); }},
@@ -439,7 +455,7 @@ function buildDeck(){ let deck=[]; CARD_TYPES.forEach(def=>{ for(let i=0;i<def.c
 function costLabel(cost){ let parts=[]; if(cost.sun) parts.push('☀'+cost.sun); if(cost.moon) parts.push('🌙'+cost.moon); return parts.length? parts.join(' ') : '무료'; }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function randomRoomId(){ const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<6;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
-function makePlayer(id,name,isBot){ return {id, name, isBot, sun:START_SUN, moon:START_MOON, hand:[], totems:[], shield:false, skipNext:false, alive:true}; }
+function makePlayer(id,name,isBot){ return {id, name, isBot, sun:START_SUN, moon:START_MOON, hand:[], totems:[], shield:false, totemShieldCooldown:0, skipNext:false, alive:true}; }
 
 /* ============================= BACKGROUND MUSIC (bgm1.mp3 / bgm2.mp3, alternating with 0.5s gap, gain-boosted) ============================= */
 // NOTE: Chrome/Edge routes <audio> through Web Audio's MediaElementSource as CORS-tainted when the
@@ -608,13 +624,26 @@ const game = {
     if(delta.moon) p.moon += delta.moon*mult;
     if(delta.sun || delta.moon){
       let parts=[]; if(delta.sun) parts.push('☀+'+(delta.sun*mult)); if(delta.moon) parts.push('🌙+'+(delta.moon*mult));
-      this.log(`${p.name}: ${parts.join(' ')} 획득 (총 ${p.sun+p.moon}/24)`);
+      this.log(`${p.name}: ${parts.join(' ')} 획득 (총 ${p.sun+p.moon}/30)`);
     }
     this.checkWin(p);
   },
   loseFate(p,delta){ if(delta.sun) p.sun=Math.max(0,p.sun-delta.sun); if(delta.moon) p.moon=Math.max(0,p.moon-delta.moon); },
   tryBlockCurse(t){
-    if(t.shield){ t.shield=false; this.log(`🛡 ${t.name}의 결계가 저주를 막아냈습니다!`); showToast(`🛡 <b>${esc(t.name)}</b>의 결계 발동<div class="big">저주 무효화</div>`,'success'); return true; }
+    if(t.shield){
+      t.shield=false;
+      this.log(`🛡 ${t.name}의 결계가 저주를 막아냈습니다!`);
+      if(MY_INDEX===this.players.indexOf(t)) triggerShieldBreak();
+      showToast(`🛡 <b>${esc(t.name)}</b>의 결계 발동<div class="big">저주 무효화</div>`,'success');
+      return true;
+    }
+    if(t.totems.includes('totem_shield') && (t.totemShieldCooldown||0)<=0){
+      t.totemShieldCooldown = 3;
+      this.log(`🗿 ${t.name}의 Fate Shield 토템이 저주를 막았습니다! (3턴 후 재충전)`);
+      if(MY_INDEX===this.players.indexOf(t)) triggerShieldBreak();
+      showToast(`🗿 <b>${esc(t.name)}</b>의 Fate Shield 발동<div class="big">저주 무효화</div>`,'success');
+      return true;
+    }
     return false;
   },
   stealCard(p,t){
@@ -664,7 +693,7 @@ const game = {
   },
   riskJudgment(p){
     const total = p.sun+p.moon;
-    let risk = Math.min(98, Math.round(total*3.7));
+    let risk = Math.min(100, Math.round(total/24*100));
     if(p.totems.includes('totem_eye')) risk = Math.max(0, risk-10);
     const roll = Math.random()*100;
     if(roll<risk){
@@ -678,7 +707,7 @@ const game = {
     }
   },
 
-  checkWin(p){ if(this.gameOver || !p.alive) return; if(p.sun+p.moon===24){ this.endGame(p,'win'); } },
+  checkWin(p){ if(this.gameOver || !p.alive) return; if(p.sun+p.moon===30){ this.endGame(p,'win'); } },
   checkLoss(p){
     if(this.gameOver || !p.alive) return;
     if(p.hand.length>=10){
@@ -710,6 +739,10 @@ const game = {
     const p = this.players[this.currentIdx];
     if(!p.alive){ this.nextTurn(); return; }
     this.turnCount = (this.turnCount||0) + 1;
+    if(p.totemShieldCooldown>0){
+      p.totemShieldCooldown--;
+      if(p.totemShieldCooldown===0) this.log(`🗿 ${p.name}의 Fate Shield 토템이 재충전되었습니다.`);
+    }
     this.log(`— ${p.name}의 턴 (${this.turnCount}) —`);
     if(p.skipNext){
       p.skipNext=false;
@@ -895,7 +928,7 @@ const NET = {
       deckCount: game.deck.length, messages: game.messages.slice(-40),
       finalWinnerId: game.finalWinnerId, finalResult: game.finalResult,
       players: game.players.map((p,idx)=>({
-        id:p.id, name:p.name, sun:p.sun, moon:p.moon, alive:p.alive, shield:p.shield, totems:[...p.totems], skipNext:p.skipNext,
+        id:p.id, name:p.name, sun:p.sun, moon:p.moon, alive:p.alive, shield:p.shield, totems:[...p.totems], totemShieldCooldown:p.totemShieldCooldown||0, skipNext:p.skipNext,
         handCount:p.hand.length,
         hand: idx===recipientIdx ? p.hand.map(c=>({iid:c.iid,type:c.type})) : undefined
       }))
@@ -1023,7 +1056,9 @@ const NET = {
     if(msg.type==='state'){ this.applyState(msg.snapshot); return; }
   },
   applyState(snapshot){
-    const wasAliveBefore = game.players[MY_INDEX] ? game.players[MY_INDEX].alive : true;
+    const meBefore = game.players[MY_INDEX];
+    const wasAliveBefore = meBefore ? meBefore.alive : true;
+    const wasShieldedBefore = meBefore ? !!(meBefore.shield || (meBefore.totems.includes('totem_shield') && (meBefore.totemShieldCooldown||0)<=0)) : false;
     game.currentIdx = snapshot.currentIdx;
     game.awaitingHumanAction = snapshot.awaitingHumanAction;
     game.awaitingDrawChoice = snapshot.awaitingDrawChoice;
@@ -1033,11 +1068,13 @@ const NET = {
     game.finalWinnerId = snapshot.finalWinnerId;
     game.finalResult = snapshot.finalResult;
     game.players = snapshot.players.map((sp,idx)=>({
-      id:sp.id, name:sp.name, sun:sp.sun, moon:sp.moon, alive:sp.alive, shield:sp.shield, totems:sp.totems, skipNext:sp.skipNext,
+      id:sp.id, name:sp.name, sun:sp.sun, moon:sp.moon, alive:sp.alive, shield:sp.shield, totems:sp.totems, totemShieldCooldown:sp.totemShieldCooldown||0, skipNext:sp.skipNext,
       hand: sp.hand ? sp.hand : Array.from({length: sp.handCount}, (_,i)=>({iid:'hidden'+idx+'_'+i, type:null}))
     }));
     const meNow = game.players[MY_INDEX];
     if(wasAliveBefore && meNow && !meNow.alive && !game.gameOver){ showToast('💀 당신은 파멸했습니다. 관전 모드로 전환됩니다.','fail'); }
+    const isShieldedNow = meNow ? !!(meNow.shield || (meNow.totems.includes('totem_shield') && (meNow.totemShieldCooldown||0)<=0)) : false;
+    if(wasShieldedBefore && !isShieldedNow){ triggerShieldBreak(); }
     render();
     if(game.gameOver && !game._endgameShown){
       const winner = game.players.find(pl=>pl.id===game.finalWinnerId);
@@ -1315,7 +1352,7 @@ function showEndgameModalFor(winner, result){
   const me = game.players[MY_INDEX];
   const isMe = winner && me && winner.id===me.id;
   let glyph='🌘', title='', desc='';
-  if(result==='win'){ glyph='🌟'; title = isMe? '승리 — 운명이 완성되었습니다' : `${winner? winner.name: '상대'}의 승리`; desc = isMe? '☀ 양 + 🌙 음이 정확히 24를 이루었습니다.' : `${winner? winner.name:'상대'}의 운명이 정확히 24를 이루었습니다.`; }
+  if(result==='win'){ glyph='🌟'; title = isMe? '승리 — 운명이 완성되었습니다' : `${winner? winner.name: '상대'}의 승리`; desc = isMe? '☀ 양 + 🌙 음이 정확히 30을 이루었습니다.' : `${winner? winner.name:'상대'}의 운명이 정확히 30을 이루었습니다.`; }
   else { glyph='🏆'; title = isMe? '생존 승리' : `${winner? winner.name:'상대'}의 생존 승리`; desc = isMe? '모두가 파멸한 뒤 마지막까지 살아남았습니다.' : `${winner? winner.name:'상대'}가 마지막까지 살아남았습니다.`; }
   layer.innerHTML = `
     <div class="modal-overlay">
@@ -1336,6 +1373,20 @@ function riskClass(risk){
   return {color:'var(--risk-extreme)', label:'극위험'};
 }
 function getDeckCount(){ return NET.mode==='client' ? (game.deckCount||0) : game.deck.length; }
+function updateShieldVisual(){
+  const p = game.players[MY_INDEX];
+  const overlay = document.getElementById('shield-overlay');
+  if(!p || !overlay) return;
+  const active = !!(p.shield || (p.totems && p.totems.includes('totem_shield') && (p.totemShieldCooldown||0)<=0));
+  overlay.classList.toggle('active', active);
+}
+function triggerShieldBreak(){
+  const overlay = document.getElementById('shield-overlay');
+  if(!overlay) return;
+  overlay.classList.remove('active');
+  overlay.classList.add('shatter');
+  setTimeout(()=> overlay.classList.remove('shatter'), 780);
+}
 
 function render(){
   const human = game.players[MY_INDEX];
@@ -1353,11 +1404,16 @@ function render(){
   const oppRow = document.getElementById('opponents-row');
   oppRow.innerHTML = game.players.filter((pl,idx)=>idx!==MY_INDEX).map(pl=>{
     const targetable = !!game.pendingCard && pl.alive;
-    const totemsHtml = pl.totems.map(t=>`<span title="${esc(CARD_MAP[t].name)}">${FAMILY_META.TOTEM.glyph}</span>`).join('');
+    const totemsHtml = pl.totems.map(t=>{
+      if(t==='totem_shield' && (pl.totemShieldCooldown||0)>0){
+        return `<span title="${esc(CARD_MAP[t].name)} — 재충전까지 ${pl.totemShieldCooldown}턴" style="opacity:0.4;">${FAMILY_META.TOTEM.glyph}<span style="font-family:var(--font-mono); font-size:9px; vertical-align:super;">${pl.totemShieldCooldown}</span></span>`;
+      }
+      return `<span title="${esc(CARD_MAP[t].name)}">${FAMILY_META.TOTEM.glyph}</span>`;
+    }).join('');
     return `<div class="opp-panel ${!pl.alive?'dead':''} ${pl===cur && !game.gameOver?'current-turn':''} ${targetable?'targetable':''}" onclick="${targetable? `selectTarget('${pl.id}')`:''}">
       <div class="opp-name">${esc(pl.name)} ${pl.shield?'<span class="shield">🛡</span>':''}</div>
       <div class="opp-stats">
-        <span>☀ ${pl.sun}</span><span>🌙 ${pl.moon}</span><span>Σ ${pl.sun+pl.moon}/24</span>
+        <span>☀ ${pl.sun}</span><span>🌙 ${pl.moon}</span><span>Σ ${pl.sun+pl.moon}/30</span>
         <span class="${pl.hand.length>=9?'danger':pl.hand.length>=7?'warn':''}">🂠 ${pl.hand.length}/10</span>
       </div>
       <div class="opp-totems">${totemsHtml}</div>
@@ -1375,9 +1431,9 @@ function render(){
 
   document.getElementById('hud-sun').textContent = '☀ '+String(human.sun).padStart(2,'0');
   document.getElementById('hud-moon').textContent = '🌙 '+String(human.moon).padStart(2,'0');
-  document.getElementById('hud-total').textContent = `TOTAL ${human.sun+human.moon} / 24`;
+  document.getElementById('hud-total').textContent = `TOTAL ${human.sun+human.moon} / 30`;
   const total = human.sun+human.moon;
-  let risk = Math.min(98, Math.round(total*3.7));
+  let risk = Math.min(100, Math.round(total/24*100));
   if(human.totems.includes('totem_eye')) risk = Math.max(0, risk-10);
   const rc = riskClass(risk);
   document.getElementById('risk-bar').style.width = risk+'%';
@@ -1405,6 +1461,8 @@ function render(){
       <div class="desc">${esc(def.desc)}</div>
     </div>`;
   }).join('') || '<div style="color:var(--ivory-dim); font-family:var(--font-mono); font-size:12px;">손패가 비어 있습니다.</div>';
+
+  updateShieldVisual();
 }
 </script>
 </body>
