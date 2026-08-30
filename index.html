@@ -145,10 +145,14 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
 .mandala-ring{position:absolute; inset:0; border-radius:50%; border:1px solid rgba(205,164,78,0.28);}
 .mandala-ring.r2{inset:16px; border-style:dashed; animation:spin 50s linear infinite;}
 .mandala-ring.r3{inset:32px; animation:spin 35s linear infinite reverse; border-color:rgba(147,118,217,0.35);}
-.deck-core{position:relative; width:90px; height:90px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #2a1c40, #0c0814 75%); border:1px solid var(--gold); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 0 30px rgba(147,118,217,0.35), inset 0 0 20px rgba(0,0,0,0.6);}
+.deck-core{position:relative; width:90px; height:90px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #2a1c40, #0c0814 75%); border:1px solid var(--gold); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 0 30px rgba(147,118,217,0.35), inset 0 0 20px rgba(0,0,0,0.6); transition:box-shadow .25s, transform .15s;}
 .deck-core .glyph{font-size:24px; margin-bottom:2px; filter:drop-shadow(0 0 8px rgba(240,198,116,0.6));}
 .deck-core .count{font-family:var(--font-mono); font-size:11px; color:var(--gold-bright);}
 .deck-label{font-family:var(--font-mono); font-size:10px; letter-spacing:0.14em; color:var(--ivory-dim); text-transform:uppercase;}
+.fate-deck-wrap.drawable{cursor:pointer;}
+.fate-deck-wrap.drawable .deck-core{animation:drawPulse 1.3s infinite; border-color:var(--gold-bright);}
+@keyframes drawPulse{0%,100%{box-shadow:0 0 30px rgba(240,198,116,0.4), inset 0 0 20px rgba(0,0,0,0.6);}50%{box-shadow:0 0 48px rgba(240,198,116,0.75), inset 0 0 20px rgba(0,0,0,0.6);}}
+.deck-label.drawable-label{color:var(--gold-bright);}
 
 .eventlog{width:min(560px,92vw); max-height:88px; overflow-y:auto; font-family:var(--font-mono); font-size:11.5px; color:var(--ivory-dim); background:rgba(0,0,0,0.28); border:1px solid var(--panel-border); border-radius:8px; padding:8px 12px; line-height:1.7;}
 .pending-banner{font-family:var(--font-display); font-size:13px; color:var(--gamble); letter-spacing:0.06em; background:rgba(223,98,72,0.1); border:1px solid rgba(223,98,72,0.4); border-radius:6px; padding:6px 14px;}
@@ -312,16 +316,17 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
   <div class="opponents-row" id="opponents-row"></div>
 
   <div class="center-area">
-    <div class="fate-deck-wrap">
+    <div class="fate-deck-wrap" id="fate-deck-wrap" onclick="onDrawClick()">
       <div class="mandala-ring r3"></div>
       <div class="mandala-ring r2"></div>
       <div class="mandala-ring"></div>
-      <div class="deck-core">
+      <div class="deck-core" id="deck-core">
         <div class="glyph">🔮</div>
         <div class="count" id="deck-count">64 / 64</div>
       </div>
     </div>
-    <div class="deck-label">DRAW FATE</div>
+    <div class="deck-label" id="deck-label">DRAW FATE</div>
+    <button class="ghost-btn" id="skip-draw-btn" style="display:none; width:auto; padding:6px 16px; margin-top:2px;" onclick="onSkipDrawClick(); event.stopPropagation();">뽑지 않기</button>
     <div id="pending-banner-slot"></div>
     <div class="eventlog" id="eventlog"></div>
   </div>
@@ -559,8 +564,8 @@ let MY_INDEX = 0; // host / local player is always 0; clients get assigned index
 /* ============================= GAME ENGINE ============================= */
 const game = {
   players:[], deck:[], discard:[], messages:[], currentIdx:0,
-  gameOver:false, awaitingHumanAction:false, fusionMode:false, fusionSelected:[], pendingCard:null,
-  deckCount:64, finalWinnerId:null, finalResult:null, _selfWasAlive:true, _endgameShown:false,
+  gameOver:false, awaitingHumanAction:false, awaitingDrawChoice:false, fusionMode:false, fusionSelected:[], pendingCard:null,
+  deckCount:64, finalWinnerId:null, finalResult:null, _selfWasAlive:true, _endgameShown:false, turnCount:0,
 
   log(msg){ this.messages.push(msg); if(this.messages.length>60) this.messages.shift(); },
   canAfford(p,cost){ return p.sun>=(cost.sun||0) && p.moon>=(cost.moon||0); },
@@ -692,11 +697,20 @@ const game = {
     if(NET.mode==='host'){ NET.broadcastState(); }
   },
 
+  applyPeriodicBlessing(p){
+    if(this.turnCount % 3 !== 0) return;
+    const amount = 1 + Math.floor(Math.random()*4); // 1~4
+    const which = Math.random()<0.5 ? 'sun':'moon';
+    this.gainFate(p, which==='sun' ? {sun:amount} : {moon:amount});
+    this.log(`🌟 3턴째 축복: ${p.name}의 ${which==='sun'?'☀':'🌙'}이(가) ${amount} 상승했습니다.`);
+    if(MY_INDEX===this.players.indexOf(p)) showToast(`🌟 3턴 축복<div class="big">${which==='sun'?'☀':'🌙'} +${amount}</div>`,'success');
+  },
   startTurn(){
     if(this.gameOver) return;
     const p = this.players[this.currentIdx];
     if(!p.alive){ this.nextTurn(); return; }
-    this.log(`— ${p.name}의 턴 —`);
+    this.turnCount = (this.turnCount||0) + 1;
+    this.log(`— ${p.name}의 턴 (${this.turnCount}) —`);
     if(p.skipNext){
       p.skipNext=false;
       this.log(`${p.name}은(는) 속박으로 인해 턴을 건너뜁니다.`);
@@ -704,12 +718,34 @@ const game = {
       setTimeout(()=>this.nextTurn(), 600);
       return;
     }
-    this.drawCards(p,1);
+    if(p.isBot){
+      this.drawCards(p,1);
+      if(this.gameOver) return;
+      this.applyPeriodicBlessing(p);
+      if(this.gameOver) return;
+      this.riskJudgment(p);
+      if(this.gameOver) return;
+      render(); setTimeout(()=>this.botAct(p), 850);
+    } else {
+      this.awaitingDrawChoice = true;
+      render(); if(NET.mode==='host') NET.broadcastState();
+    }
+  },
+  resolveDraw(p, choseToDraw){
+    if(this.gameOver) return;
+    this.awaitingDrawChoice = false;
+    if(choseToDraw){
+      this.drawCards(p,1);
+      if(this.gameOver) return;
+    } else {
+      this.log(`${p.name}이(가) 카드를 뽑지 않기로 했습니다.`);
+    }
+    this.applyPeriodicBlessing(p);
     if(this.gameOver) return;
     this.riskJudgment(p);
     if(this.gameOver) return;
-    if(p.isBot){ render(); setTimeout(()=>this.botAct(p), 850); }
-    else { this.awaitingHumanAction = true; render(); if(NET.mode==='host') NET.broadcastState(); }
+    this.awaitingHumanAction = true;
+    render(); if(NET.mode==='host') NET.broadcastState();
   },
   nextTurn(){
     if(this.gameOver) return;
@@ -855,7 +891,7 @@ const NET = {
 
   buildSnapshot(recipientIdx){
     return {
-      currentIdx: game.currentIdx, awaitingHumanAction: game.awaitingHumanAction, gameOver: game.gameOver,
+      currentIdx: game.currentIdx, awaitingHumanAction: game.awaitingHumanAction, awaitingDrawChoice: game.awaitingDrawChoice, gameOver: game.gameOver,
       deckCount: game.deck.length, messages: game.messages.slice(-40),
       finalWinnerId: game.finalWinnerId, finalResult: game.finalResult,
       players: game.players.map((p,idx)=>({
@@ -902,9 +938,12 @@ const NET = {
     if(msg.type==='action'){
       const idx = this.connIndexOf(conn);
       if(idx==null) return;
-      if(game.gameOver || game.currentIdx!==idx || !game.awaitingHumanAction) return;
+      if(game.gameOver || game.currentIdx!==idx) return;
       const p = game.players[idx];
       const a = msg.action;
+      if(a.type==='draw'){ if(game.awaitingDrawChoice) game.resolveDraw(p, true); return; }
+      if(a.type==='skipDraw'){ if(game.awaitingDrawChoice) game.resolveDraw(p, false); return; }
+      if(!game.awaitingHumanAction) return;
       if(a.type==='playCard'){
         const card = p.hand.find(c=>c.iid===a.iid); if(!card) return;
         const def = CARD_MAP[card.type]; if(!game.canAfford(p,def.cost)) return;
@@ -942,7 +981,7 @@ const NET = {
     const players = [makePlayer('p0', this.displayName, false)];
     this.conns.forEach(c=>{ players.push(makePlayer('p'+c.index, c.name, false)); });
     game.players = players; game.deck = buildDeck(); game.discard=[]; game.messages=[];
-    game.gameOver=false; game.currentIdx=0; game.finalWinnerId=null; game.finalResult=null; MY_INDEX=0;
+    game.gameOver=false; game.currentIdx=0; game.finalWinnerId=null; game.finalResult=null; MY_INDEX=0; game.turnCount=0; game.awaitingDrawChoice=false;
     game.log('✦ 64장의 운명이 셔플되었습니다. 온라인 의식이 시작됩니다.');
     this.conns.forEach(c=>{ try{ c.conn.send({type:'start'}); }catch(e){} });
     document.getElementById('lobby-screen').style.display='none';
@@ -987,6 +1026,7 @@ const NET = {
     const wasAliveBefore = game.players[MY_INDEX] ? game.players[MY_INDEX].alive : true;
     game.currentIdx = snapshot.currentIdx;
     game.awaitingHumanAction = snapshot.awaitingHumanAction;
+    game.awaitingDrawChoice = snapshot.awaitingDrawChoice;
     game.gameOver = snapshot.gameOver;
     game.deckCount = snapshot.deckCount;
     game.messages = snapshot.messages;
@@ -1083,7 +1123,7 @@ function switchModeTab(mode){
 document.getElementById('start-local-btn').onclick = ()=>{
   NET.mode='local'; MY_INDEX=0;
   game.deck = buildDeck(); game.discard=[]; game.messages=[]; game.gameOver=false; game.currentIdx=0;
-  game.finalWinnerId=null; game.finalResult=null; game._endgameShown=false;
+  game.finalWinnerId=null; game.finalResult=null; game._endgameShown=false; game.turnCount=0; game.awaitingDrawChoice=false;
   game.players = [makePlayer('p0','당신',false)];
   for(let i=0;i<selectedBots;i++) game.players.push(makePlayer('p'+(i+1), BOT_NAMES[i], true));
   document.getElementById('start-screen').style.display='none';
@@ -1164,6 +1204,16 @@ window.addEventListener('beforeunload', ()=>{
 });
 
 /* ============================= HUMAN INTERACTIONS ============================= */
+function onDrawClick(){
+  if(!game.awaitingDrawChoice || game.gameOver || game.currentIdx!==MY_INDEX) return;
+  if(NET.mode==='client'){ NET.sendAction({type:'draw'}); game.awaitingDrawChoice=false; render(); }
+  else { game.resolveDraw(game.players[MY_INDEX], true); }
+}
+function onSkipDrawClick(){
+  if(!game.awaitingDrawChoice || game.gameOver || game.currentIdx!==MY_INDEX) return;
+  if(NET.mode==='client'){ NET.sendAction({type:'skipDraw'}); game.awaitingDrawChoice=false; render(); }
+  else { game.resolveDraw(game.players[MY_INDEX], false); }
+}
 function onCardClick(iid){
   if(game.gameOver) return;
   const p = game.players[MY_INDEX];
@@ -1248,18 +1298,17 @@ function showVisionModal(targetName, revealedNames, stolenName){
   const layer = document.getElementById('modal-layer');
   const cardsHtml = revealedNames.map(n=>`<div class="vision-card ${n===stolenName?'stolen':''}">${esc(n)}</div>`).join('');
   layer.innerHTML = `
-    <div class="modal-overlay">
-      <div class="modal-box vision-box">
+    <div class="modal-overlay" id="vision-overlay" style="opacity:0; transition:opacity 0.4s ease; background:rgba(4,3,8,0.7);">
+      <div class="modal-box vision-box" style="background:transparent; border:none; box-shadow:none; text-align:center;">
         <div class="vision-title">👁 THE VISION OPENS — ${esc(targetName)}의 손패</div>
-        <div class="vision-cards">${cardsHtml}</div>
+        <div class="vision-cards" style="justify-content:center;">${cardsHtml}</div>
         <div style="margin-top:14px; font-family:var(--font-mono); font-size:11px; color:var(--gamble);">STEAL → ${esc(stolenName)}</div>
       </div>
     </div>`;
-  setTimeout(()=>{
-    const box = layer.querySelector('.vision-title');
-    if(box) box.textContent = 'THE VISION FADES...';
-    setTimeout(()=>{ closeModal(); }, 500);
-  }, 2600);
+  const overlay = document.getElementById('vision-overlay');
+  requestAnimationFrame(()=>{ if(overlay) overlay.style.opacity='1'; }); // fade in
+  setTimeout(()=>{ if(overlay) overlay.style.opacity='0'; }, 1500); // begin fade out after 1.5s hold
+  setTimeout(()=>{ closeModal(); }, 1500+450); // fully removed once the fade-out finishes
 }
 function showEndgameModalFor(winner, result){
   const layer = document.getElementById('modal-layer');
@@ -1293,8 +1342,13 @@ function render(){
   if(!human) return;
 
   const cur = game.players[game.currentIdx];
-  document.getElementById('turn-indicator').innerHTML = game.gameOver ? '의식 종료' : `ROUND · 현재 턴: <b>${esc(cur? cur.name:'—')}</b>`;
+  const canDraw = game.awaitingDrawChoice && !game.gameOver && game.currentIdx===MY_INDEX && human.alive;
+  document.getElementById('turn-indicator').innerHTML = game.gameOver ? '의식 종료' : (canDraw ? `당신의 턴 — 카드를 뽑으세요` : `ROUND · 현재 턴: <b>${esc(cur? cur.name:'—')}</b>`);
   document.getElementById('deck-count').textContent = `${getDeckCount()} / 64`;
+  document.getElementById('fate-deck-wrap').classList.toggle('drawable', canDraw);
+  document.getElementById('deck-label').classList.toggle('drawable-label', canDraw);
+  document.getElementById('deck-label').textContent = canDraw ? 'DRAW FATE (클릭해서 뽑기)' : 'DRAW FATE';
+  document.getElementById('skip-draw-btn').style.display = canDraw ? 'inline-block' : 'none';
 
   const oppRow = document.getElementById('opponents-row');
   oppRow.innerHTML = game.players.filter((pl,idx)=>idx!==MY_INDEX).map(pl=>{
