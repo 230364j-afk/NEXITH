@@ -233,20 +233,41 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
   .fate-hud,.cards-hud{text-align:center;}
   .card{width:92px; min-height:128px;}
 #shield-overlay{
-  position:fixed; inset:0; z-index:1; pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='84' viewBox='0 0 48 84'%3E%3Cpath d='M24 0L48 14V42L24 56L0 42V14Z' fill='none' stroke='%23ffd452' stroke-width='3'/%3E%3Cpath d='M24 28L48 42V70L24 84L0 70V42Z' fill='none' stroke='%23ffd452' stroke-width='3'/%3E%3C/svg%3E");
-  background-size:48px 84px;
+  position:fixed; left:1vw; top:50%; transform:translateY(-50%);
+  width:min(26vw, 340px); height:min(70vh, 620px);
+  z-index:1; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='168' viewBox='0 0 96 168'%3E%3Cpath d='M48 0L96 28V84L48 112L0 84V28Z' fill='%23ffb300' fill-opacity='0.24' stroke='%23ffe066' stroke-width='5'/%3E%3Cpath d='M48 56L96 84V140L48 168L0 140V84Z' fill='%23ffb300' fill-opacity='0.24' stroke='%23ffe066' stroke-width='5'/%3E%3C/svg%3E");
+  background-size:96px 168px;
+  -webkit-mask-image:radial-gradient(ellipse 68% 62% at 50% 50%, black 35%, transparent 82%);
+  mask-image:radial-gradient(ellipse 68% 62% at 50% 50%, black 35%, transparent 82%);
   opacity:0; transition:opacity .5s ease;
-  filter:drop-shadow(0 0 10px rgba(255,212,82,0.85)) saturate(1.5);
-  mix-blend-mode:screen;
+  filter:drop-shadow(0 0 18px rgba(255,224,102,0.9));
 }
-#shield-overlay.active{ opacity:0.5; animation:honeycombPulse 2.2s ease-in-out infinite; }
-@keyframes honeycombPulse{ 0%,100%{opacity:0.36;} 50%{opacity:0.62;} }
-#shield-overlay.shatter{ opacity:0.8; animation:honeycombShatter 0.8s ease-out forwards; }
+@media (max-width:980px){ #shield-overlay{ display:none; } }
+#shield-overlay.active{ opacity:0.95; animation:honeycombPulse 2.2s ease-in-out infinite; }
+@keyframes honeycombPulse{ 0%,100%{opacity:0.8;} 50%{opacity:1;} }
+#shield-overlay.shatter{ opacity:1; animation:honeycombShatter 0.8s ease-out forwards; }
 @keyframes honeycombShatter{
-  0%{ opacity:0.75; filter:drop-shadow(0 0 24px rgba(255,220,120,1)) brightness(2.1) saturate(1.6); transform:scale(1); }
-  35%{ opacity:0.9; filter:drop-shadow(0 0 32px rgba(255,255,255,1)) brightness(2.6); transform:scale(1.045); }
-  100%{ opacity:0; filter:drop-shadow(0 0 0 rgba(255,212,82,0)); transform:scale(1.1); }
+  0%{ opacity:1; filter:drop-shadow(0 0 30px rgba(255,220,120,1)) brightness(1.6); transform:translateY(-50%) scale(1); }
+  35%{ opacity:1; filter:drop-shadow(0 0 40px rgba(255,255,255,1)) brightness(2); transform:translateY(-50%) scale(1.05); }
+  100%{ opacity:0; filter:drop-shadow(0 0 0 rgba(255,212,82,0)); transform:translateY(-50%) scale(1.12); }
+}
+
+/* Embedded hex-glow: shows the honeycomb underneath specific opaque UI panels (event log, deck, opponent cards) */
+.hex-glow{ position:relative; z-index:0; }
+.hex-glow::before{
+  content:''; position:absolute; inset:0; border-radius:inherit; z-index:-1; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='70' viewBox='0 0 48 84'%3E%3Cpath d='M24 0L48 14V42L24 56L0 42V14Z' fill='%23ffb300' fill-opacity='0.2' stroke='%23ffe066' stroke-width='3'/%3E%3Cpath d='M24 28L48 42V70L24 84L0 70V42Z' fill='%23ffb300' fill-opacity='0.2' stroke='%23ffe066' stroke-width='3'/%3E%3C/svg%3E");
+  background-size:40px 70px;
+  opacity:0; transition:opacity .5s ease;
+  filter:drop-shadow(0 0 8px rgba(255,224,102,0.85));
+}
+.hex-glow.active::before{ opacity:0.9; animation:honeycombPulse 2.2s ease-in-out infinite; }
+.hex-glow.shatter::before{ opacity:1; animation:honeycombShatterLocal 0.8s ease-out forwards; }
+@keyframes honeycombShatterLocal{
+  0%{ opacity:1; filter:drop-shadow(0 0 20px rgba(255,220,120,1)) brightness(1.6); transform:scale(1); }
+  35%{ opacity:1; filter:drop-shadow(0 0 28px rgba(255,255,255,1)) brightness(2); transform:scale(1.04); }
+  100%{ opacity:0; filter:drop-shadow(0 0 0 rgba(255,212,82,0)); transform:scale(1.08); }
 }
 </style>
 </head>
@@ -294,9 +315,9 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
       <div class="field"><label>당신의 이름</label><input id="join-name" maxlength="10" placeholder="방랑자" value="방랑자"></div>
       <div class="field"><label>Room ID</label><input id="join-roomid" maxlength="6" placeholder="예: A7K92P" style="text-transform:uppercase; letter-spacing:0.2em;"></div>
       <button class="start-btn" id="join-btn">입장한다</button>
-      <div class="setup-label" style="margin-top:18px;">🖥 이 브라우저에서 열린 방 (다른 탭)</div>
+      <div class="setup-label" style="margin-top:18px;">🌐 열려 있는 방</div>
       <div class="room-list" id="room-list"><div class="empty-note">열린 방을 탐색 중...</div></div>
-      <div class="rules-hint" style="margin-top:4px;">※ 실제 인터넷 전체의 공개 방 목록을 보려면 별도의 룸 디렉터리 서버가 필요합니다. 위 목록은 <b>같은 브라우저의 다른 탭</b>에서 연 방만 표시됩니다. 원격 상대와 플레이하려면 Room ID를 직접 공유해 입장하세요.</div>
+      <div class="rules-hint" style="margin-top:4px;">※ 다른 PC/브라우저에서 만든 방도 몇 초 내로 자동 표시됩니다 (서버 배포에 <code>/api/rooms</code> 함수가 포함되어 있어야 합니다). 표시가 안 뜬다면 Room ID를 직접 공유해 입장할 수 있습니다.</div>
     </div>
 
     <div class="rules-hint" style="margin-top:18px;">☀ 양 + 🌙 음이 정확히 <b>30</b>이 되면 승리, 손패가 <b>10장</b>에 이르면 그 플레이어는 파멸합니다. 총합이 <b>24</b>에 이르면 균형 판정 위험도가 100%에 달합니다. 모든 플레이어는 ☀3 · 🌙3으로 의식을 시작합니다.</div>
@@ -336,7 +357,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
       <div class="mandala-ring r3"></div>
       <div class="mandala-ring r2"></div>
       <div class="mandala-ring"></div>
-      <div class="deck-core" id="deck-core">
+      <div class="deck-core hex-glow" id="deck-core">
         <div class="glyph">🔮</div>
         <div class="count" id="deck-count">64 / 64</div>
       </div>
@@ -344,7 +365,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
     <div class="deck-label" id="deck-label">DRAW FATE</div>
     <button class="ghost-btn" id="skip-draw-btn" style="display:none; width:auto; padding:6px 16px; margin-top:2px;" onclick="onSkipDrawClick(); event.stopPropagation();">뽑지 않기</button>
     <div id="pending-banner-slot"></div>
-    <div class="eventlog" id="eventlog"></div>
+    <div class="eventlog hex-glow" id="eventlog"></div>
   </div>
 
   <div class="hud-row">
@@ -1083,7 +1104,7 @@ const NET = {
     }
   },
 
-  /* ---------- DIRECTORY (same-browser room list) ---------- */
+  /* ---------- DIRECTORY (BroadcastChannel for same-browser tabs + /api/rooms for real cross-device listing) ---------- */
   startDirectoryAnnounce(){
     if(this.directoryChannel) this.directoryChannel.close();
     this.directoryChannel = new BroadcastChannel(NS+'directory');
@@ -1092,6 +1113,7 @@ const NET = {
         this.directoryChannel.postMessage({kind:'announce', roomId:this.roomId, hostName:this.displayName,
           count:1+this.conns.length, max:6, locked:this.locked, virtual:this.virtual, ts:Date.now()});
       }catch(e){}
+      announceRemote();
     };
     this.directoryChannel.onmessage = (e)=>{ if(e.data && e.data.kind==='query') announce(); };
     announce();
@@ -1100,11 +1122,33 @@ const NET = {
   stopDirectoryAnnounce(){
     if(this.directoryInterval) clearInterval(this.directoryInterval);
     if(this.directoryChannel){ try{ this.directoryChannel.postMessage({kind:'remove', roomId:this.roomId}); }catch(e){} this.directoryChannel.close(); }
+    removeRemote();
   }
 };
 
+/* ---------- Cross-device directory via /api/rooms (Vercel serverless function; see /api/rooms.js) ---------- */
+const ROOMS_API = '/api/rooms';
+async function announceRemote(){
+  try{
+    await fetch(ROOMS_API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ roomId:NET.roomId, hostName:NET.displayName, count:1+NET.conns.length, max:6, locked:NET.locked, virtual:NET.virtual })
+    });
+  }catch(e){ /* /api/rooms not deployed or offline — local BroadcastChannel discovery still works */ }
+}
+async function removeRemote(){
+  try{ await fetch(ROOMS_API, { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({roomId:NET.roomId}) }); }catch(e){}
+}
+async function fetchRemoteRooms(){
+  try{
+    const res = await fetch(ROOMS_API);
+    if(!res.ok) return [];
+    return await res.json();
+  }catch(e){ return []; }
+}
+
 /* ============================= ROOM LIST (join panel) ============================= */
-let roomListChannel = null, roomListSweep = null;
+let roomListChannel = null, roomListSweep = null, remotePollInterval = null;
 function startRoomListListener(){
   NET.knownRooms = {};
   roomListChannel = new BroadcastChannel(NS+'directory');
@@ -1120,13 +1164,20 @@ function startRoomListListener(){
     Object.keys(NET.knownRooms).forEach(id=>{ if(now - NET.knownRooms[id].seen > 7000){ delete NET.knownRooms[id]; changed=true; } });
     if(changed) renderRoomList();
   }, 3000);
+  const pollRemote = async ()=>{
+    const remoteRooms = await fetchRemoteRooms();
+    remoteRooms.forEach(r=>{ NET.knownRooms[r.roomId] = {...r, seen:Date.now()}; });
+    renderRoomList();
+  };
+  pollRemote();
+  remotePollInterval = setInterval(pollRemote, 3000);
   renderRoomList();
 }
 function renderRoomList(){
   const el = document.getElementById('room-list');
   if(!el) return;
   const rooms = Object.values(NET.knownRooms);
-  if(rooms.length===0){ el.innerHTML = '<div class="empty-note">아직 열린 방이 없습니다. (같은 브라우저의 다른 탭에서 "방 만들기"를 실행해보세요)</div>'; return; }
+  if(rooms.length===0){ el.innerHTML = '<div class="empty-note">아직 열린 방이 없습니다. 다른 PC/브라우저에서 "방 만들기"를 실행하면 여기 자동으로 나타납니다.</div>'; return; }
   el.innerHTML = rooms.map(r=>`
     <div class="room-row">
       <span><span class="rid">${esc(r.roomId)}</span> · ${esc(r.hostName)} · ${r.count}/${r.max} ${r.locked?'🔒':''}</span>
@@ -1373,19 +1424,25 @@ function riskClass(risk){
   return {color:'var(--risk-extreme)', label:'극위험'};
 }
 function getDeckCount(){ return NET.mode==='client' ? (game.deckCount||0) : game.deck.length; }
+function isArmed(p){
+  return !!(p && (p.shield || (p.totems && p.totems.includes('totem_shield') && (p.totemShieldCooldown||0)<=0)));
+}
 function updateShieldVisual(){
   const p = game.players[MY_INDEX];
-  const overlay = document.getElementById('shield-overlay');
-  if(!p || !overlay) return;
-  const active = !!(p.shield || (p.totems && p.totems.includes('totem_shield') && (p.totemShieldCooldown||0)<=0));
-  overlay.classList.toggle('active', active);
+  const active = isArmed(p);
+  ['shield-overlay','eventlog','deck-core'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('active', active);
+  });
 }
 function triggerShieldBreak(){
-  const overlay = document.getElementById('shield-overlay');
-  if(!overlay) return;
-  overlay.classList.remove('active');
-  overlay.classList.add('shatter');
-  setTimeout(()=> overlay.classList.remove('shatter'), 780);
+  ['shield-overlay','eventlog','deck-core'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('active');
+    el.classList.add('shatter');
+    setTimeout(()=> el.classList.remove('shatter'), 780);
+  });
 }
 
 function render(){
@@ -1410,7 +1467,7 @@ function render(){
       }
       return `<span title="${esc(CARD_MAP[t].name)}">${FAMILY_META.TOTEM.glyph}</span>`;
     }).join('');
-    return `<div class="opp-panel ${!pl.alive?'dead':''} ${pl===cur && !game.gameOver?'current-turn':''} ${targetable?'targetable':''}" onclick="${targetable? `selectTarget('${pl.id}')`:''}">
+    return `<div class="opp-panel hex-glow ${isArmed(pl)?'active':''} ${!pl.alive?'dead':''} ${pl===cur && !game.gameOver?'current-turn':''} ${targetable?'targetable':''}" onclick="${targetable? `selectTarget('${pl.id}')`:''}">
       <div class="opp-name">${esc(pl.name)} ${pl.shield?'<span class="shield">🛡</span>':''}</div>
       <div class="opp-stats">
         <span>☀ ${pl.sun}</span><span>🌙 ${pl.moon}</span><span>Σ ${pl.sun+pl.moon}/30</span>
