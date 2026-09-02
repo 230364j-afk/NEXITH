@@ -96,6 +96,15 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
 .volume-slider{width:90px; accent-color:var(--gold);}
 .volume-pct{font-family:var(--font-mono); font-size:10.5px; color:var(--ivory-dim); min-width:34px; text-align:left;}
 .music-row{display:flex; align-items:center; gap:8px; justify-content:center;}
+.auth-row{display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:16px; font-family:var(--font-mono); font-size:12px;}
+.google-btn{display:flex; align-items:center; gap:8px; padding:9px 16px; border-radius:20px; border:1px solid var(--panel-border); background:rgba(255,255,255,0.04); color:var(--ivory); font-family:var(--font-display); font-size:12.5px; letter-spacing:0.03em; cursor:pointer; transition:all .15s;}
+.google-btn:hover{border-color:var(--gold); color:var(--gold-bright);}
+.profile-chip{display:flex; align-items:center; gap:8px; padding:5px 12px 5px 5px; border-radius:20px; border:1px solid var(--panel-border); background:rgba(255,255,255,0.03);}
+.profile-chip img{width:26px; height:26px; border-radius:50%;}
+.profile-name{color:var(--gold-bright); font-family:var(--font-display); font-size:12.5px;}
+.profile-stats{color:var(--ivory-dim);}
+.logout-link{color:var(--ivory-dim); text-decoration:underline; cursor:pointer; font-size:11px;}
+.logout-link:hover{color:var(--gamble);}
 .rules-hint{margin-top:16px; font-size:14px; color:var(--ivory-dim); line-height:1.55;}
 .rules-hint b{color:var(--gold-bright); font-weight:600;}
 
@@ -288,6 +297,12 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
     <input class="volume-slider" type="range" min="50" max="300" value="200" oninput="BGM.setVolume(this.value/100)">
     <span class="volume-pct">200%</span>
   </div>
+  <div class="auth-row" id="auth-row">
+    <button class="google-btn" id="google-login-btn" onclick="handleGoogleLogin()">
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google로 로그인
+    </button>
+  </div>
 
   <div class="setup-card">
     <div class="mode-tabs">
@@ -343,6 +358,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
     <div class="brand">☾ THE NEXIS FAITH ☉</div>
     <div class="turn-indicator" id="turn-indicator">—</div>
     <div class="music-row">
+      <span id="topbar-profile-slot"></span>
       <button class="icon-btn music-btn" onclick="BGM.toggleMute()">🔊 음악</button>
       <input class="volume-slider" type="range" min="50" max="300" value="200" oninput="BGM.setVolume(this.value/100)">
       <span class="volume-pct">200%</span>
@@ -743,7 +759,7 @@ const game = {
     this.gameOver = true; this.awaitingHumanAction = false;
     this.finalWinnerId = winner.id; this.finalResult = result;
     render();
-    if(NET.mode!=='client'){ showEndgameModalFor(winner, result); this._endgameShown = true; }
+    if(NET.mode!=='client'){ showEndgameModalFor(winner, result); this._endgameShown = true; recordGameResult(); }
     if(NET.mode==='host'){ NET.broadcastState(); }
   },
 
@@ -1101,6 +1117,7 @@ const NET = {
       const winner = game.players.find(pl=>pl.id===game.finalWinnerId);
       showEndgameModalFor(winner, game.finalResult);
       game._endgameShown = true;
+      recordGameResult();
     }
   },
 
@@ -1186,6 +1203,66 @@ function renderRoomList(){
 }
 
 /* ============================= MODE TABS & SETUP ============================= */
+/* ============================= ACCOUNTS (Firebase Google login + win/loss record) ============================= */
+let firebaseUser = null;
+let currentProfile = null;
+
+async function handleGoogleLogin(){
+  if(!window.NEXIS_AUTH){ showToast('⚠ 로그인 모듈이 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.','fail'); return; }
+  try{
+    await window.NEXIS_AUTH.login();
+  }catch(e){
+    showToast(`⚠ 로그인에 실패했습니다.<div style="font-family:var(--font-mono); font-size:10.5px; margin-top:6px; color:var(--ivory-dim); word-break:break-all;">${esc(e && e.message ? e.message : String(e))}</div>`,'fail', 7000);
+  }
+}
+async function handleLogout(){
+  if(!window.NEXIS_AUTH) return;
+  try{ await window.NEXIS_AUTH.logout(); }catch(e){}
+}
+window.onNexisAuthChange = async function(user){
+  firebaseUser = user;
+  if(user){
+    try{
+      currentProfile = await window.NEXIS_AUTH.ensureProfile(user);
+    }catch(e){
+      console.error(e);
+      showToast('⚠ 프로필을 불러오지 못했습니다. Firestore 보안 규칙을 확인해주세요.','fail', 6000);
+      currentProfile = { name:user.displayName||'방랑자', wins:0, losses:0, games:0 };
+    }
+    const nm = user.displayName || '방랑자';
+    ['host-name','join-name'].forEach(id=>{ const el=document.getElementById(id); if(el && !el.value) el.value = nm; });
+  } else {
+    currentProfile = null;
+  }
+  renderAuthUI();
+};
+function renderAuthUI(){
+  const authRow = document.getElementById('auth-row');
+  const topbarSlot = document.getElementById('topbar-profile-slot');
+  if(firebaseUser && currentProfile){
+    const photo = firebaseUser.photoURL ? `<img src="${esc(firebaseUser.photoURL)}" referrerpolicy="no-referrer">` : '👤';
+    const chip = `<div class="profile-chip">${photo}<span class="profile-name">${esc(currentProfile.name||firebaseUser.displayName||'방랑자')}</span><span class="profile-stats">${currentProfile.wins||0}승 ${currentProfile.losses||0}패</span><span class="logout-link" onclick="handleLogout()">로그아웃</span></div>`;
+    if(authRow) authRow.innerHTML = chip;
+    if(topbarSlot) topbarSlot.innerHTML = chip;
+  } else {
+    const btn = `<button class="google-btn" onclick="handleGoogleLogin()">${GOOGLE_ICON_SVG}Google로 로그인</button>`;
+    if(authRow) authRow.innerHTML = btn;
+    if(topbarSlot) topbarSlot.innerHTML = '';
+  }
+}
+async function recordGameResult(){
+  if(!firebaseUser || !window.NEXIS_AUTH) return;
+  const me = game.players[MY_INDEX];
+  if(!me) return;
+  const didWin = game.finalWinnerId === me.id;
+  try{
+    await window.NEXIS_AUTH.recordResult(firebaseUser.uid, didWin);
+    currentProfile = await window.NEXIS_AUTH.getProfile(firebaseUser.uid) || currentProfile;
+    renderAuthUI();
+  }catch(e){ console.error('전적 기록 실패', e); }
+}
+const GOOGLE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 48 48" style="margin-right:6px; vertical-align:-3px;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
 const BOT_NAMES = ['NX','SHADOW','FAITH','ORACLE','VESSEL'];
 let selectedBots = 3;
 function initBotSelect(){
@@ -1521,6 +1598,74 @@ function render(){
 
   updateShieldVisual();
 }
+</script>
+
+<script type="module">
+  // Firebase — Google login + Firestore win/loss record storage.
+  // Runs as a module (deferred), so it executes after the classic script above
+  // has already defined window.onNexisAuthChange.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBbRHiYYd5Gn3eS2IAHp55AxISvK29yPbo",
+    authDomain: "nexith-faith.firebaseapp.com",
+    databaseURL: "https://nexith-faith-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "nexith-faith",
+    storageBucket: "nexith-faith.firebasestorage.app",
+    messagingSenderId: "2907040987",
+    appId: "1:2907040987:web:460baf543e5d55e83a30fe",
+    measurementId: "G-X6PTP34PLZ"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  window.NEXIS_AUTH = {
+    currentUser: null,
+    async login(){
+      const result = await signInWithPopup(auth, provider);
+      return result.user;
+    },
+    async logout(){
+      await signOut(auth);
+    },
+    async ensureProfile(user){
+      const ref = doc(db, 'players', user.uid);
+      const snap = await getDoc(ref);
+      if(!snap.exists()){
+        await setDoc(ref, {
+          name: user.displayName || '방랑자',
+          wins: 0, losses: 0, games: 0,
+          createdAt: Date.now()
+        });
+        const fresh = await getDoc(ref);
+        return fresh.data();
+      }
+      return snap.data();
+    },
+    async getProfile(uid){
+      const ref = doc(db, 'players', uid);
+      const snap = await getDoc(ref);
+      return snap.exists() ? snap.data() : null;
+    },
+    async recordResult(uid, didWin){
+      const ref = doc(db, 'players', uid);
+      await updateDoc(ref, {
+        wins: increment(didWin ? 1 : 0),
+        losses: increment(didWin ? 0 : 1),
+        games: increment(1)
+      });
+    }
+  };
+
+  onAuthStateChanged(auth, (user)=>{
+    window.NEXIS_AUTH.currentUser = user;
+    if(window.onNexisAuthChange) window.onNexisAuthChange(user);
+  });
 </script>
 </body>
 </html>
