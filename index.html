@@ -1230,12 +1230,14 @@ async function handleLogout(){
   try{ await window.NEXIS_AUTH.logout(); }catch(e){}
 }
 window.onNexisAuthChange = async function(user){
+  console.log('[NexisAuth] classic-script onNexisAuthChange called with', user ? user.uid : null);
   firebaseUser = user;
   if(user){
     try{
       currentProfile = await window.NEXIS_AUTH.ensureProfile(user);
+      console.log('[NexisAuth] ensureProfile succeeded ->', currentProfile);
     }catch(e){
-      console.error(e);
+      console.error('[NexisAuth] ensureProfile FAILED ->', e.code, e.message, e);
       showToast('⚠ 프로필을 불러오지 못했습니다. Firestore 보안 규칙을 확인해주세요.','fail', 6000);
       currentProfile = { name:user.displayName||'방랑자', wins:0, losses:0, games:0, coins:0 };
     }
@@ -1245,6 +1247,7 @@ window.onNexisAuthChange = async function(user){
     currentProfile = null;
   }
   renderAuthUI();
+  console.log('[NexisAuth] renderAuthUI complete. auth-row element found?', !!document.getElementById('auth-row'));
 };
 function renderAuthUI(){
   const authRow = document.getElementById('auth-row');
@@ -1684,14 +1687,23 @@ function render(){
     }
   };
 
-  getRedirectResult(auth).catch((err)=>{
-    console.error('Google redirect login error', err);
+  console.log('[NexisAuth] Firebase module initialized. authDomain =', firebaseConfig.authDomain, '| current URL =', location.href);
+
+  getRedirectResult(auth).then((result)=>{
+    console.log('[NexisAuth] getRedirectResult resolved ->', result ? ('user uid='+result.user.uid) : 'null (no pending redirect result)');
+  }).catch((err)=>{
+    console.error('[NexisAuth] getRedirectResult ERROR ->', err.code, err.message, err);
     if(window.onNexisAuthLoginError) window.onNexisAuthLoginError(err);
   });
 
   onAuthStateChanged(auth, (user)=>{
+    console.log('[NexisAuth] onAuthStateChanged fired ->', user ? ('logged in, uid='+user.uid+', name='+user.displayName) : 'logged out (null)');
     window.NEXIS_AUTH.currentUser = user;
-    if(window.onNexisAuthChange) window.onNexisAuthChange(user);
+    if(window.onNexisAuthChange){
+      window.onNexisAuthChange(user);
+    } else {
+      console.warn('[NexisAuth] window.onNexisAuthChange is not defined yet — classic script may not have loaded.');
+    }
   });
 </script>
 </body>
