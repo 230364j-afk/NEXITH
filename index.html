@@ -105,6 +105,23 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
 .profile-stats{color:var(--ivory-dim);}
 .logout-link{color:var(--ivory-dim); text-decoration:underline; cursor:pointer; font-size:11px;}
 .logout-link:hover{color:var(--gamble);}
+
+.slot-machine-frame{border:1px solid var(--gold); border-radius:12px; padding:20px; background:radial-gradient(ellipse at 50% 0%, rgba(205,164,78,0.12), transparent 70%), rgba(0,0,0,0.25); text-align:center;}
+.slot-balance-row{font-family:var(--font-mono); font-size:13px; color:var(--ivory-dim); margin-bottom:14px;}
+.slot-balance-row b{color:var(--gold-bright); font-size:16px;}
+.slot-reels{display:flex; gap:10px; justify-content:center; margin-bottom:16px;}
+.slot-reel{width:72px; height:72px; border-radius:10px; border:1px solid var(--panel-border); background:linear-gradient(160deg, rgba(30,20,44,0.95), rgba(10,7,16,0.95)); display:flex; align-items:center; justify-content:center; font-size:34px; box-shadow:inset 0 0 14px rgba(0,0,0,0.5);}
+.slot-reel.spinning{animation:slotSpin 0.08s linear infinite;}
+@keyframes slotSpin{ 0%{transform:translateY(0);} 100%{transform:translateY(6px);} }
+.slot-reel.win-glow{border-color:var(--gold); box-shadow:0 0 20px rgba(240,198,116,0.7), inset 0 0 14px rgba(0,0,0,0.5);}
+.slot-result-line{min-height:22px; font-family:var(--font-display); font-size:14px; margin-bottom:14px;}
+.slot-result-line.win{color:var(--risk-safe);}
+.slot-result-line.lose{color:var(--risk-danger);}
+.slot-bet-row{display:flex; align-items:center; gap:8px; justify-content:center; margin-bottom:14px;}
+.slot-bet-row input{width:120px; padding:9px 10px; border-radius:6px; border:1px solid var(--panel-border); background:rgba(0,0,0,0.3); color:var(--ivory); font-family:var(--font-mono); font-size:14px; text-align:center;}
+.slot-chip-row{display:flex; gap:6px; justify-content:center; margin-bottom:14px; flex-wrap:wrap;}
+.slot-chip{padding:5px 11px; border-radius:14px; border:1px solid var(--panel-border); background:rgba(255,255,255,0.03); color:var(--ivory-dim); font-family:var(--font-mono); font-size:11px; cursor:pointer;}
+.slot-chip:hover{border-color:var(--gold); color:var(--gold-bright);}
 .wallet-display{display:none; align-items:center; justify-content:center; gap:8px; margin-bottom:18px; padding:10px 20px; border-radius:10px; border:1px solid rgba(205,164,78,0.4); background:rgba(205,164,78,0.08); font-family:var(--font-mono); font-size:16px; color:var(--gold-bright); letter-spacing:0.04em;}
 .wallet-display.show{display:flex;}
 .wallet-display .wallet-label{font-size:11px; color:var(--ivory-dim); letter-spacing:0.12em; text-transform:uppercase;}
@@ -316,6 +333,7 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
       <button class="mode-tab active" data-mode="local" onclick="switchModeTab('local')">🤖 로컬 (봇)</button>
       <button class="mode-tab" data-mode="host" onclick="switchModeTab('host')">👑 방 만들기</button>
       <button class="mode-tab" data-mode="join" onclick="switchModeTab('join')">🔑 참가하기</button>
+      <button class="mode-tab" data-mode="slot" onclick="switchModeTab('slot')">🎰 파칭코</button>
     </div>
 
     <!-- LOCAL -->
@@ -340,6 +358,11 @@ h1,h2,h3{font-family:var(--font-display); letter-spacing:0.06em; margin:0;}
       <div class="setup-label" style="margin-top:18px;">🌐 열려 있는 방</div>
       <div class="room-list" id="room-list"><div class="empty-note">열린 방을 탐색 중...</div></div>
       <div class="rules-hint" style="margin-top:4px;">※ 다른 PC/브라우저에서 만든 방도 몇 초 내로 자동 표시됩니다 (서버 배포에 <code>/api/rooms</code> 함수가 포함되어 있어야 합니다). 표시가 안 뜬다면 Room ID를 직접 공유해 입장할 수 있습니다.</div>
+    </div>
+
+    <!-- SLOT MACHINE -->
+    <div class="mode-panel" id="panel-slot">
+      <div id="slot-content"></div>
     </div>
 
     <div class="rules-hint" style="margin-top:18px;">☀ 양 + 🌙 음이 <b>30 이상</b>이 되면 승리, 손패가 <b>10장</b>에 이르면 그 플레이어는 파멸합니다. 총합이 <b>24</b>에 이르면 균형 판정 위험도가 100%에 달합니다. 모든 플레이어는 ☀3 · 🌙3으로 의식을 시작합니다.</div>
@@ -1274,6 +1297,8 @@ function renderAuthUI(){
     if(authRow) authRow.innerHTML = btn;
     if(topbarSlot) topbarSlot.innerHTML = '';
   }
+  const slotPanel = document.getElementById('panel-slot');
+  if(slotPanel && slotPanel.classList.contains('active') && !slotSpinning) renderSlotPanel();
 }
 async function recordGameResult(){
   if(!firebaseUser || !window.NEXIS_AUTH) return;
@@ -1310,7 +1335,140 @@ function switchModeTab(mode){
   document.getElementById('panel-local').classList.toggle('active', mode==='local');
   document.getElementById('panel-host').classList.toggle('active', mode==='host');
   document.getElementById('panel-join').classList.toggle('active', mode==='join');
+  document.getElementById('panel-slot').classList.toggle('active', mode==='slot');
   if(mode==='join' && !roomListChannel) startRoomListListener();
+  if(mode==='slot') renderSlotPanel();
+}
+
+/* ============================= SLOT MACHINE (파칭코) ============================= */
+const SLOT_SYMBOLS = ['🍒','🍋','🍇','🔔','⭐','💎','7️⃣'];
+const SLOT_MIN_BET = 100, SLOT_MAX_BET = 10000;
+let slotSpinning = false;
+
+function renderSlotPanel(){
+  const el = document.getElementById('slot-content');
+  if(!el) return;
+  if(!firebaseUser){
+    el.innerHTML = `
+      <div class="slot-machine-frame">
+        <div style="font-size:40px; margin-bottom:10px;">🎰</div>
+        <div class="rules-hint" style="margin-top:0;">파칭코는 로그인 후 이용할 수 있습니다. 자금이 계정에 저장됩니다.</div>
+        <button class="google-btn" style="margin:14px auto 0;" onclick="handleGoogleLogin()">${GOOGLE_ICON_SVG}Google로 로그인</button>
+      </div>`;
+    return;
+  }
+  const balance = currentProfile ? (currentProfile.coins||0) : 0;
+  el.innerHTML = `
+    <div class="slot-machine-frame">
+      <div class="slot-balance-row">보유 자금 <b id="slot-balance-num">💰 ${balance.toLocaleString()}</b></div>
+      <div class="slot-reels">
+        <div class="slot-reel" id="slot-reel-0">${SLOT_SYMBOLS[0]}</div>
+        <div class="slot-reel" id="slot-reel-1">${SLOT_SYMBOLS[1]}</div>
+        <div class="slot-reel" id="slot-reel-2">${SLOT_SYMBOLS[2]}</div>
+      </div>
+      <div class="slot-result-line" id="slot-result-line"></div>
+      <div class="slot-bet-row">
+        <button class="icon-btn" onclick="adjustSlotBet(-100)">－</button>
+        <input type="number" id="slot-bet" min="${SLOT_MIN_BET}" max="${SLOT_MAX_BET}" step="100" value="100">
+        <button class="icon-btn" onclick="adjustSlotBet(100)">＋</button>
+      </div>
+      <div class="slot-chip-row">
+        <span class="slot-chip" onclick="setSlotBet(100)">100</span>
+        <span class="slot-chip" onclick="setSlotBet(500)">500</span>
+        <span class="slot-chip" onclick="setSlotBet(1000)">1,000</span>
+        <span class="slot-chip" onclick="setSlotBet(5000)">5,000</span>
+        <span class="slot-chip" onclick="setSlotBet(10000)">MAX</span>
+      </div>
+      <button class="start-btn" id="slot-spin-btn" onclick="handleSlotSpin()">🎰 스핀!</button>
+      <div class="rules-hint">베팅 ${SLOT_MIN_BET}~${SLOT_MAX_BET.toLocaleString()}원 · 3개 일치 <b>30배</b> (1.024%) · 2개 일치 <b>1.5배</b> (48.076%) · 그 외 베팅액 전액 소진 (약 50.9%)</div>
+    </div>`;
+}
+function setSlotBet(v){
+  const input = document.getElementById('slot-bet');
+  if(input) input.value = Math.max(SLOT_MIN_BET, Math.min(SLOT_MAX_BET, v));
+}
+function adjustSlotBet(delta){
+  const input = document.getElementById('slot-bet');
+  if(!input) return;
+  let v = (parseInt(input.value,10)||SLOT_MIN_BET) + delta;
+  input.value = Math.max(SLOT_MIN_BET, Math.min(SLOT_MAX_BET, v));
+}
+function pickOutcome(){
+  const roll = Math.random()*100;
+  if(roll < 1.024) return {type:'triple', multiplier:30};
+  if(roll < 1.024+48.076) return {type:'double', multiplier:1.5};
+  return {type:'none', multiplier:0};
+}
+function generateReelSymbols(outcomeType){
+  const pick = ()=> SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)];
+  if(outcomeType==='triple'){
+    const s = pick();
+    return [s,s,s];
+  }
+  if(outcomeType==='double'){
+    const main = pick();
+    let other = pick();
+    while(other===main) other = pick();
+    const slots = [main,main,other];
+    // shuffle so the mismatched one isn't always last
+    for(let i=slots.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [slots[i],slots[j]]=[slots[j],slots[i]]; }
+    return slots;
+  }
+  // none: 3 distinct symbols
+  const shuffled = [...SLOT_SYMBOLS].sort(()=>Math.random()-0.5);
+  return shuffled.slice(0,3);
+}
+async function handleSlotSpin(){
+  if(slotSpinning) return;
+  if(!firebaseUser){ showToast('⚠ 로그인 후 이용할 수 있습니다.','fail'); return; }
+  const betInput = document.getElementById('slot-bet');
+  let bet = parseInt(betInput.value,10);
+  if(isNaN(bet)) bet = SLOT_MIN_BET;
+  bet = Math.max(SLOT_MIN_BET, Math.min(SLOT_MAX_BET, bet));
+  betInput.value = bet;
+  const balance = currentProfile ? (currentProfile.coins||0) : 0;
+  if(bet > balance){ showToast('⚠ 보유 자금보다 큰 금액은 베팅할 수 없습니다.','fail'); return; }
+
+  slotSpinning = true;
+  const spinBtn = document.getElementById('slot-spin-btn');
+  if(spinBtn) spinBtn.disabled = true;
+  const resultLine = document.getElementById('slot-result-line');
+  if(resultLine){ resultLine.textContent = ''; resultLine.className = 'slot-result-line'; }
+  const reelEls = [0,1,2].map(i=>document.getElementById('slot-reel-'+i));
+  reelEls.forEach(r=> r && r.classList.remove('win-glow'));
+
+  const outcome = pickOutcome();
+  const finalSymbols = generateReelSymbols(outcome.type);
+
+  // spin animation: rapid random symbols, reels stop one by one
+  const spinTimers = reelEls.map((r)=> setInterval(()=>{
+    if(r){ r.textContent = SLOT_SYMBOLS[Math.floor(Math.random()*SLOT_SYMBOLS.length)]; r.classList.add('spinning'); }
+  }, 70));
+  const stopDelays = [700, 1000, 1300];
+  await Promise.all(reelEls.map((r,i)=> new Promise(resolve=>{
+    setTimeout(()=>{
+      clearInterval(spinTimers[i]);
+      if(r){ r.textContent = finalSymbols[i]; r.classList.remove('spinning'); }
+      resolve();
+    }, stopDelays[i]);
+  })));
+
+  try{
+    const newBalance = await window.NEXIS_AUTH.spinSlot(firebaseUser.uid, bet, outcome.multiplier);
+    if(currentProfile) currentProfile.coins = newBalance;
+    renderAuthUI();
+    const balNum = document.getElementById('slot-balance-num');
+    if(balNum) balNum.innerHTML = '💰 ' + newBalance.toLocaleString();
+    if(resultLine){
+      if(outcome.type==='triple'){ resultLine.textContent = `🎉 3개 일치! ${bet.toLocaleString()} × 30 = +${(bet*30).toLocaleString()}`; resultLine.classList.add('win'); reelEls.forEach(r=>r&&r.classList.add('win-glow')); }
+      else if(outcome.type==='double'){ resultLine.textContent = `✨ 2개 일치! +${Math.round(bet*0.5).toLocaleString()} (순이익)`; resultLine.classList.add('win'); }
+      else { resultLine.textContent = `💨 꽝... -${bet.toLocaleString()}`; resultLine.classList.add('lose'); }
+    }
+  }catch(e){
+    showToast(`⚠ ${esc(e.message||String(e))}`,'fail');
+  }
+  slotSpinning = false;
+  if(spinBtn) spinBtn.disabled = false;
 }
 
 document.getElementById('start-local-btn').onclick = ()=>{
@@ -1634,7 +1792,7 @@ function render(){
   // has already defined window.onNexisAuthChange.
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { initializeFirestore, doc, getDoc, setDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { initializeFirestore, doc, getDoc, setDoc, updateDoc, increment, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBbRHiYYd5Gn3eS2IAHp55AxISvK29yPbo",
@@ -1673,7 +1831,7 @@ function render(){
       if(!snap.exists()){
         await setDoc(ref, {
           name: user.displayName || '방랑자',
-          wins: 0, losses: 0, games: 0, coins: 0,
+          wins: 0, losses: 0, games: 0, coins: 1000,
           createdAt: Date.now()
         });
         const fresh = await getDoc(ref);
@@ -1699,6 +1857,19 @@ function render(){
     async awardCoins(uid, amount){
       const ref = doc(db, 'players', uid);
       await updateDoc(ref, { coins: increment(amount) });
+    },
+    async spinSlot(uid, bet, multiplier){
+      const ref = doc(db, 'players', uid);
+      return await runTransaction(db, async (tx)=>{
+        const snap = await tx.get(ref);
+        if(!snap.exists()) throw new Error('프로필을 찾을 수 없습니다.');
+        const balance = snap.data().coins || 0;
+        if(bet > balance) throw new Error('보유 자금보다 큰 금액은 베팅할 수 없습니다.');
+        const payout = Math.round(bet * multiplier);
+        const newBalance = balance - bet + payout;
+        tx.update(ref, { coins: newBalance });
+        return newBalance;
+      });
     }
   };
 
