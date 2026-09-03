@@ -1217,15 +1217,14 @@ let currentProfile = null;
 async function handleGoogleLogin(){
   if(!window.NEXIS_AUTH){ showToast('⚠ 로그인 모듈이 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.','fail'); return; }
   try{
-    const user = await window.NEXIS_AUTH.login();
-    // Defensive: onAuthStateChanged should already trigger this, but force it
-    // immediately too in case of any listener-timing edge case, so the login
-    // button is guaranteed to disappear right after a successful popup login.
-    if(user) await window.onNexisAuthChange(user);
+    await window.NEXIS_AUTH.login(); // navigates away to Google; page reloads back here on success
   }catch(e){
     showToast(`⚠ 로그인에 실패했습니다.<div style="font-family:var(--font-mono); font-size:10.5px; margin-top:6px; color:var(--ivory-dim); word-break:break-all;">${esc(e && e.message ? e.message : String(e))}</div>`,'fail', 7000);
   }
 }
+window.onNexisAuthLoginError = function(err){
+  showToast(`⚠ 로그인에 실패했습니다.<div style="font-family:var(--font-mono); font-size:10.5px; margin-top:6px; color:var(--ivory-dim); word-break:break-all;">${esc(err && err.code ? err.code : '')}: ${esc(err && err.message ? err.message : String(err))}</div>`,'fail', 8000);
+};
 async function handleLogout(){
   if(!window.NEXIS_AUTH) return;
   try{ await window.NEXIS_AUTH.logout(); }catch(e){}
@@ -1619,7 +1618,7 @@ function render(){
   // Runs as a module (deferred), so it executes after the classic script above
   // has already defined window.onNexisAuthChange.
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, getDoc, setDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1641,8 +1640,11 @@ function render(){
   window.NEXIS_AUTH = {
     currentUser: null,
     async login(){
-      const result = await signInWithPopup(auth, provider);
-      return result.user;
+      // Redirect flow instead of popup: signInWithPopup silently hangs on many Vercel
+      // deployments because the browser's Cross-Origin-Opener-Policy blocks the popup's
+      // postMessage back to this window (no error, it just never resolves). Redirect
+      // navigates away to Google and back, sidestepping that entirely.
+      await signInWithRedirect(auth, provider);
     },
     async logout(){
       await signOut(auth);
@@ -1681,6 +1683,11 @@ function render(){
       await updateDoc(ref, { coins: increment(amount) });
     }
   };
+
+  getRedirectResult(auth).catch((err)=>{
+    console.error('Google redirect login error', err);
+    if(window.onNexisAuthLoginError) window.onNexisAuthLoginError(err);
+  });
 
   onAuthStateChanged(auth, (user)=>{
     window.NEXIS_AUTH.currentUser = user;
