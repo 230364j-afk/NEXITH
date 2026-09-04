@@ -899,7 +899,15 @@ function attemptFusionFor(p, iids){
       game.discard.push(...sel);
       game.log(`🔀 합성 성공: Gamble + Chaos → ${CARD_MAP[chosen].name} 카드 획득! (${p.name})`);
       if(MY_INDEX===game.players.indexOf(p)) showToast(`🔀 합성 성공<div class="big">${esc(CARD_MAP[chosen].name)}</div>`,'success');
-    } else { game.log('⚠ 이 조합은 합성할 수 없습니다. (2장 합성: Gamble + Chaos만 가능)'); }
+    } else if(fams.includes('SUN') && fams.includes('MOON')){
+      p.hand = p.hand.filter(c=>!sel.includes(c));
+      const eclipseTypes = ['ecl_total','ecl_verdict','ecl_umbral'];
+      const chosen = eclipseTypes[Math.floor(Math.random()*eclipseTypes.length)];
+      p.hand.push({iid:newIid(), type:chosen});
+      game.discard.push(...sel);
+      game.log(`🔀 합성 성공: Sun + Moon → ${CARD_MAP[chosen].name}(Eclipse) 카드 획득! (${p.name})`);
+      if(MY_INDEX===game.players.indexOf(p)) showToast(`🔀 합성 성공<div class="big">${esc(CARD_MAP[chosen].name)}</div>`,'success');
+    } else { game.log('⚠ 이 조합은 합성할 수 없습니다. (2장 합성: Gamble+Chaos 또는 Sun+Moon만 가능)'); }
   } else if(sel.length===3){
     const fams = sel.map(c=>CARD_MAP[c.type].family);
     const uniq = new Set(fams);
@@ -911,7 +919,7 @@ function attemptFusionFor(p, iids){
       game.log(`🔀 합성 성공: 서로 다른 카드 3종 → Third Eye(View) 카드 획득! (${p.name})`);
       if(MY_INDEX===game.players.indexOf(p)) showToast('🔀 합성 성공<div class="big">Third Eye</div>','success');
     } else { game.log('⚠ 3장 합성은 서로 다른 종류의 카드여야 합니다.'); }
-  } else if(sel.length>0){ game.log('⚠ 합성하려면 카드 2장(Gamble+Chaos) 또는 서로 다른 종류 3장을 선택하세요.'); }
+  } else if(sel.length>0){ game.log('⚠ 합성하려면 카드 2장(Gamble+Chaos 또는 Sun+Moon) 또는 서로 다른 종류 3장을 선택하세요.'); }
   render();
   if(NET.mode==='host') NET.broadcastState();
 }
@@ -1308,11 +1316,14 @@ async function recordGameResult(){
   const isBotVictory = (NET.mode==='local') && didWin;
   const coinsAward = isBotVictory ? 200 : 0;
   try{
-    await window.NEXIS_AUTH.recordResult(firebaseUser.uid, didWin, coinsAward);
-    currentProfile = await window.NEXIS_AUTH.getProfile(firebaseUser.uid) || currentProfile;
+    await withTimeout(window.NEXIS_AUTH.recordResult(firebaseUser.uid, didWin, coinsAward), 8000, 'recordResult');
+    currentProfile = await withTimeout(window.NEXIS_AUTH.getProfile(firebaseUser.uid), 8000, 'getProfile') || currentProfile;
     renderAuthUI();
     if(coinsAward>0){ showToast(`💰 봇 승리 보상<div class="big">+${coinsAward}</div>`,'success'); }
-  }catch(e){ console.error('전적 기록 실패', e); }
+  }catch(e){
+    console.error('[NexisAuth] 전적 기록 실패', e);
+    showToast(`⚠ 전적/코인 저장에 실패했습니다.<div style="font-family:var(--font-mono); font-size:10.5px; margin-top:6px; color:var(--ivory-dim);">Firestore Database가 생성되어 있는지 확인해주세요.</div>`,'fail', 7000);
+  }
 }
 const GOOGLE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 48 48" style="margin-right:6px; vertical-align:-3px;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
