@@ -1,0 +1,7 @@
+my-game/
+├─ index.html
+├─ bgm1.mp3
+├─ bgm2.mp3
+├─ vercel.json   ← 새로 추가
+└─ api/
+   └─ rooms.js
